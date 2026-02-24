@@ -42,6 +42,13 @@ export default function App() {
   const [isMobile, setIsMobile] = useState(false);
   const [useSearch, setUseSearch] = useState(false);
   const [attachedImages, setAttachedImages] = useState<string[]>([]);
+  const [apiKeyMissing, setApiKeyMissing] = useState(false);
+
+  useEffect(() => {
+    if (!process.env.GEMINI_API_KEY) {
+      setApiKeyMissing(true);
+    }
+  }, []);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -263,6 +270,12 @@ export default function App() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col relative min-w-0">
+        {apiKeyMissing && (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-sm text-amber-800 flex items-center justify-center gap-2 z-50">
+            <Settings className="h-4 w-4" />
+            <span>API Key is missing. Please set <strong>GEMINI_API_KEY</strong> in your environment variables.</span>
+          </div>
+        )}
         {/* Header */}
         <header className="h-16 border-bottom border-zinc-200 flex items-center justify-between px-4 shrink-0 bg-white/80 backdrop-blur-md z-10">
           <div className="flex items-center gap-4">

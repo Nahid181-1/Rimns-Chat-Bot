@@ -75,9 +75,12 @@ export class GeminiService {
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      throw new Error("GEMINI_API_KEY is not set");
+      console.warn("GEMINI_API_KEY is not set. AI features will not work.");
+      // We don't throw here to prevent the entire app from crashing (white screen)
+      this.ai = null as any; 
+    } else {
+      this.ai = new GoogleGenAI({ apiKey });
     }
-    this.ai = new GoogleGenAI({ apiKey });
   }
 
   async chatStream(
@@ -85,6 +88,9 @@ export class GeminiService {
     onChunk: (text: string) => void,
     useSearch: boolean = false
   ): Promise<void> {
+    if (!this.ai) {
+      throw new Error("API Key missing. Please set GEMINI_API_KEY in your environment.");
+    }
     const model = "gemini-3.1-pro-preview";
     
     const contents = messages.map(m => {
@@ -131,6 +137,9 @@ export class GeminiService {
   }
 
   async generateImage(prompt: string): Promise<string> {
+    if (!this.ai) {
+      throw new Error("API Key missing. Please set GEMINI_API_KEY in your environment.");
+    }
     const response = await this.ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
