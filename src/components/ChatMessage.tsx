@@ -8,10 +8,11 @@ import { cn } from "@/src/lib/utils";
 interface ChatMessageProps {
   role: "user" | "model";
   text: string;
+  images?: string[];
   isLatest?: boolean;
 }
 
-export const ChatMessage: React.FC<ChatMessageProps> = ({ role, text, isLatest }) => {
+export const ChatMessage: React.FC<ChatMessageProps> = ({ role, text, images, isLatest }) => {
   const [copied, setCopied] = React.useState(false);
 
   const handleCopy = () => {
@@ -26,15 +27,15 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ role, text, isLatest }
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
       className={cn(
-        "flex w-full gap-4 p-6 transition-colors",
+        "flex w-full gap-3 sm:gap-4 p-4 sm:p-6 transition-colors",
         role === "model" ? "bg-zinc-50/50" : "bg-transparent"
       )}
     >
       <div className="flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-lg border bg-white shadow-sm">
         {role === "user" ? (
-          <User className="h-5 w-5 text-zinc-600" />
+          <User className="h-4 w-4 sm:h-5 sm:w-5 text-zinc-600" />
         ) : (
-          <Bot className="h-5 w-5 text-indigo-600" />
+          <Bot className="h-4 w-4 sm:h-5 sm:w-5 text-indigo-600" />
         )}
       </div>
 
@@ -54,6 +55,20 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ role, text, isLatest }
           )}
         </div>
         
+        {images && images.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-2">
+            {images.map((img, idx) => (
+              <img 
+                key={idx} 
+                src={img} 
+                alt="Uploaded content" 
+                className="max-w-[200px] max-h-[200px] rounded-lg object-cover border border-zinc-200 shadow-sm"
+                referrerPolicy="no-referrer"
+              />
+            ))}
+          </div>
+        )}
+
         <div className="markdown-body prose prose-zinc max-w-none prose-pre:bg-zinc-900 prose-pre:text-zinc-100 prose-code:text-indigo-600 prose-code:bg-indigo-50 prose-code:px-1 prose-code:rounded">
           <Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown>
         </div>

@@ -13,7 +13,11 @@ import {
   Rocket,
   PanelLeftClose,
   PanelLeftOpen,
-  Trash2
+  Trash2,
+  Image as ImageIcon,
+  Globe,
+  X,
+  Loader2
 } from "lucide-react";
 import { gemini, Message } from "./services/gemini";
 import { ChatMessage } from "./components/ChatMessage";
@@ -26,6 +30,7 @@ const MODES = [
   { id: "ielts", name: "IELTS Trainer", icon: Languages, color: "text-orange-600" },
   { id: "problem", name: "Problem Solver", icon: Wrench, color: "text-rose-600" },
   { id: "project", name: "Project Builder", icon: Rocket, color: "text-purple-600" },
+  { id: "image", name: "Image Generator", icon: ImageIcon, color: "text-pink-600" },
 ];
 
 export default function App() {
@@ -34,6 +39,21 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeMode, setActiveMode] = useState("general");
+  const [isMobile, setIsMobile] = useState(false);
+  const [useSearch, setUseSearch] = useState(false);
+  const [attachedImages, setAttachedImages] = useState<string[]>([]);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (mobile) setSidebarOpen(false);
+      else setSidebarOpen(true);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   useEffect(() => {
     if (messages.length === 0) {
@@ -49,6 +69,7 @@ export default function App() {
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -56,13 +77,67 @@ export default function App() {
     }
   }, [messages]);
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
 
-    const userMessage: Message = { role: "user", text: input };
+    Array.from(files).forEach(file => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAttachedImages(prev => [...prev, reader.result as string]);
+      };
+      reader.readAsDataURL(file);
+    });
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const removeImage = (index: number) => {
+    setAttachedImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleImageGeneration = async () => {
+    const prompt = input.trim();
+    if (!prompt) return;
+
+    const userMessage: Message = { role: "user", text: `Generate an image: ${prompt}` };
+    setMessages(prev => [...prev, userMessage]);
+    setInput("");
+    setIsLoading(true);
+
+    try {
+      const imageUrl = await gemini.generateImage(prompt);
+      setMessages(prev => [
+        ...prev,
+        { role: "model", text: `Here is the image I generated for "${prompt}":`, images: [imageUrl] }
+      ]);
+    } catch (error) {
+      console.error("Image gen error:", error);
+      setMessages(prev => [
+        ...prev,
+        { role: "model", text: "Failed to generate image. Please try a different prompt." }
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSend = async () => {
+    if (!input.trim() && attachedImages.length === 0 || isLoading) return;
+
+    if (activeMode === "image") {
+      await handleImageGeneration();
+      return;
+    }
+
+    const userMessage: Message = { 
+      role: "user", 
+      text: input, 
+      images: attachedImages.length > 0 ? [...attachedImages] : undefined 
+    };
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
     setInput("");
+    setAttachedImages([]);
     setIsLoading(true);
 
     try {
@@ -77,7 +152,7 @@ export default function App() {
           updated[updated.length - 1] = { role: "model", text: fullResponse };
           return updated;
         });
-      });
+      }, useSearch);
     } catch (error) {
       console.error("Chat error:", error);
       setMessages(prev => [
@@ -104,15 +179,36 @@ export default function App() {
         text: `Hello! I'm Rimns AI, your ${modeName}. How can I assist you today?` 
       }
     ]);
+    if (isMobile) setSidebarOpen(false);
   };
 
   return (
-    <div className="flex h-screen bg-white overflow-hidden">
+    <div className="flex h-screen bg-white overflow-hidden relative">
+      {/* Backdrop for mobile */}
+      <AnimatePresence>
+        {isMobile && sidebarOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSidebarOpen(false)}
+            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40"
+          />
+        )}
+      </AnimatePresence>
+
       {/* Sidebar */}
       <motion.aside
         initial={false}
-        animate={{ width: sidebarOpen ? 280 : 0, opacity: sidebarOpen ? 1 : 0 }}
-        className="border-r border-zinc-200 bg-zinc-50 flex flex-col overflow-hidden"
+        animate={{ 
+          width: sidebarOpen ? (isMobile ? "85%" : 280) : 0,
+          opacity: sidebarOpen ? 1 : 0,
+          x: sidebarOpen ? 0 : (isMobile ? -280 : 0)
+        }}
+        className={cn(
+          "border-r border-zinc-200 bg-zinc-50 flex flex-col overflow-hidden z-50",
+          isMobile ? "fixed inset-y-0 left-0 shadow-2xl" : "relative"
+        )}
       >
         <div className="p-4 flex items-center justify-between">
           <div className="flex items-center gap-2 font-bold text-xl text-zinc-900">
@@ -140,7 +236,10 @@ export default function App() {
           {MODES.map((mode) => (
             <button
               key={mode.id}
-              onClick={() => setActiveMode(mode.id)}
+              onClick={() => {
+                setActiveMode(mode.id);
+                if (isMobile) setSidebarOpen(false);
+              }}
               className={cn(
                 "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                 activeMode === mode.id
@@ -184,6 +283,17 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setUseSearch(!useSearch)}
+              className={cn(
+                "p-2 rounded-lg transition-colors flex items-center gap-2 text-sm font-medium",
+                useSearch ? "bg-indigo-50 text-indigo-600" : "text-zinc-500 hover:bg-zinc-100"
+              )}
+              title="Toggle Google Search"
+            >
+              <Globe className="h-5 w-5" />
+              {!isMobile && <span>Search</span>}
+            </button>
             <button className="p-2 hover:bg-zinc-100 rounded-lg text-zinc-500 transition-colors">
               <Search className="h-5 w-5" />
             </button>
@@ -203,20 +313,20 @@ export default function App() {
           className="flex-1 overflow-y-auto scroll-smooth"
         >
           {messages.length <= 1 && !isLoading ? (
-            <div className="h-full flex flex-col items-center justify-center p-8 text-center max-w-2xl mx-auto space-y-6">
-              <div className="h-16 w-16 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-xl shadow-indigo-200">
-                <Sparkles className="h-8 w-8 text-white" />
+            <div className="h-full flex flex-col items-center justify-center p-4 sm:p-8 text-center max-w-2xl mx-auto space-y-6">
+              <div className="h-12 w-12 sm:h-16 sm:w-16 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-xl shadow-indigo-200">
+                <Sparkles className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
               </div>
               <div className="space-y-2">
-                <h1 className="text-3xl font-bold text-zinc-900 tracking-tight">
+                <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900 tracking-tight">
                   How can I help you today?
                 </h1>
-                <p className="text-zinc-500 text-lg">
+                <p className="text-zinc-500 text-base sm:text-lg">
                   I'm Rimns AI, your intelligent partner for learning, coding, and problem solving.
                 </p>
               </div>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full mt-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 w-full mt-4 sm:mt-8">
                 {[
                   "Explain quantum computing like I'm five",
                   "Write a React hook for local storage",
@@ -229,9 +339,9 @@ export default function App() {
                       setInput(suggestion);
                       inputRef.current?.focus();
                     }}
-                    className="p-4 text-left rounded-xl border border-zinc-200 hover:border-indigo-300 hover:bg-indigo-50/30 transition-all group"
+                    className="p-3 sm:p-4 text-left rounded-xl border border-zinc-200 hover:border-indigo-300 hover:bg-indigo-50/30 transition-all group"
                   >
-                    <p className="text-sm font-medium text-zinc-700 group-hover:text-indigo-700">
+                    <p className="text-xs sm:text-sm font-medium text-zinc-700 group-hover:text-indigo-700">
                       {suggestion}
                     </p>
                   </button>
@@ -243,6 +353,7 @@ export default function App() {
                   <ChatMessage 
                     role={messages[0].role} 
                     text={messages[0].text} 
+                    images={messages[0].images}
                   />
                 </div>
               )}
@@ -254,6 +365,7 @@ export default function App() {
                   key={i} 
                   role={msg.role} 
                   text={msg.text} 
+                  images={msg.images}
                   isLatest={i === messages.length - 1}
                 />
               ))}
@@ -272,30 +384,76 @@ export default function App() {
         </div>
 
         {/* Input Area */}
-        <div className="p-4 border-t border-zinc-200 bg-white">
-          <div className="max-w-4xl mx-auto relative">
-            <textarea
-              ref={inputRef}
-              rows={1}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Message Rimns AI..."
-              className="w-full pl-4 pr-12 py-3 rounded-xl border border-zinc-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none resize-none transition-all bg-zinc-50 focus:bg-white"
-              style={{ minHeight: "44px", maxHeight: "200px" }}
-            />
-            <button
-              onClick={handleSend}
-              disabled={!input.trim() || isLoading}
-              className={cn(
-                "absolute right-2 bottom-2 p-2 rounded-lg transition-all",
-                input.trim() && !isLoading
-                  ? "bg-indigo-600 text-white shadow-md hover:bg-indigo-700"
-                  : "text-zinc-400 cursor-not-allowed"
-              )}
-            >
-              <Send className="h-5 w-5" />
-            </button>
+        <div className="p-3 sm:p-4 border-t border-zinc-200 bg-white">
+          <div className="max-w-4xl mx-auto space-y-3">
+            {attachedImages.length > 0 && (
+              <div className="flex flex-wrap gap-2 pb-2">
+                {attachedImages.map((img, idx) => (
+                  <div key={idx} className="relative group">
+                    <img 
+                      src={img} 
+                      alt="Preview" 
+                      className="h-16 w-16 object-cover rounded-lg border border-zinc-200 shadow-sm"
+                    />
+                    <button
+                      onClick={() => removeImage(idx)}
+                      className="absolute -top-1.5 -right-1.5 bg-zinc-900 text-white rounded-full p-0.5 shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            <div className="relative flex items-end gap-2">
+              <div className="flex-1 relative">
+                <textarea
+                  ref={inputRef}
+                  rows={1}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={activeMode === "image" ? "Describe the image you want to generate..." : "Message Rimns AI..."}
+                  className="w-full pl-4 pr-12 py-2.5 sm:py-3 rounded-xl border border-zinc-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none resize-none transition-all bg-zinc-50 focus:bg-white text-sm sm:text-base"
+                  style={{ minHeight: "40px", maxHeight: "200px" }}
+                />
+                <div className="absolute right-2 bottom-2 flex items-center gap-1">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleImageUpload}
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-2 text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                    title="Upload images"
+                  >
+                    <ImageIcon className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+              
+              <button
+                onClick={handleSend}
+                disabled={(!input.trim() && attachedImages.length === 0) || isLoading}
+                className={cn(
+                  "p-2.5 sm:p-3 rounded-xl transition-all shrink-0",
+                  (input.trim() || attachedImages.length > 0) && !isLoading
+                    ? "bg-indigo-600 text-white shadow-md hover:bg-indigo-700"
+                    : "bg-zinc-100 text-zinc-400 cursor-not-allowed"
+                )}
+              >
+                {isLoading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Send className="h-5 w-5" />
+                )}
+              </button>
+            </div>
           </div>
           <p className="text-[10px] text-center text-zinc-400 mt-2">
             Rimns AI can make mistakes. Check important info.

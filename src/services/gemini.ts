@@ -66,6 +66,7 @@ You are Rimns AI, a next-generation AI assistant.
 export interface Message {
   role: "user" | "model";
   text: string;
+  images?: string[]; // base64 strings
 }
 
 export class GeminiService {
@@ -79,40 +80,46 @@ export class GeminiService {
     this.ai = new GoogleGenAI({ apiKey });
   }
 
-  async chat(messages: Message[]): Promise<string> {
+  async chatStream(
+    messages: Message[], 
+    onChunk: (text: string) => void,
+    useSearch: boolean = false
+  ): Promise<void> {
     const model = "gemini-3.1-pro-preview";
     
-    // Convert messages to Gemini format
-    const contents = messages.map(m => ({
-      role: m.role === "user" ? "user" : "model",
-      parts: [{ text: m.text }]
-    }));
+    const contents = messages.map(m => {
+      const parts: any[] = [{ text: m.text }];
+      
+      if (m.images && m.images.length > 0) {
+        m.images.forEach(img => {
+          const [mimeType, data] = img.split(";base64,");
+          parts.push({
+            inlineData: {
+              mimeType: mimeType.split(":")[1],
+              data: data
+            }
+          });
+        });
+      }
 
-    const response: GenerateContentResponse = await this.ai.models.generateContent({
-      model,
-      contents,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-      },
+      return {
+        role: m.role === "user" ? "user" : "model",
+        parts
+      };
     });
 
-    return response.text || "I'm sorry, I couldn't generate a response.";
-  }
+    const config: any = {
+      systemInstruction: SYSTEM_INSTRUCTION,
+    };
 
-  async chatStream(messages: Message[], onChunk: (text: string) => void): Promise<void> {
-    const model = "gemini-3.1-pro-preview";
-    
-    const contents = messages.map(m => ({
-      role: m.role === "user" ? "user" : "model",
-      parts: [{ text: m.text }]
-    }));
+    if (useSearch) {
+      config.tools = [{ googleSearch: {} }];
+    }
 
     const stream = await this.ai.models.generateContentStream({
       model,
       contents,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-      },
+      config,
     });
 
     for await (const chunk of stream) {
@@ -121,6 +128,27 @@ export class GeminiService {
         onChunk(text);
       }
     }
+  }
+
+  async generateImage(prompt: string): Promise<string> {
+    const response = await this.ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: {
+        parts: [{ text: prompt }],
+      },
+      config: {
+        imageConfig: {
+          aspectRatio: "1:1",
+        },
+      },
+    });
+
+    for (const part of response.candidates[0].content.parts) {
+      if (part.inlineData) {
+        return `data:image/png;base64,${part.inlineData.data}`;
+      }
+    }
+    throw new Error("No image generated");
   }
 }
 
