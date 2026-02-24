@@ -14,6 +14,7 @@ interface ChatMessageProps {
 
 export const ChatMessage: React.FC<ChatMessageProps> = ({ role, text, images, isLatest }) => {
   const [copied, setCopied] = React.useState(false);
+  const isUser = role === "user";
 
   const handleCopy = () => {
     navigator.clipboard.writeText(text);
@@ -23,38 +24,42 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ role, text, images, is
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
+      initial={{ opacity: 0, scale: 0.95, y: 10 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
       className={cn(
-        "flex w-full gap-3 sm:gap-4 p-4 sm:p-6 transition-colors",
-        role === "model" ? "bg-zinc-50/50" : "bg-transparent"
+        "flex w-full mb-4 px-4 sm:px-6",
+        isUser ? "justify-end" : "justify-start"
       )}
     >
-      <div className="flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-lg border bg-white shadow-sm">
-        {role === "user" ? (
-          <User className="h-4 w-4 sm:h-5 sm:w-5 text-zinc-600" />
-        ) : (
-          <Bot className="h-4 w-4 sm:h-5 sm:w-5 text-indigo-600" />
+      <div 
+        className={cn(
+          "relative max-w-[85%] sm:max-w-[75%] rounded-2xl p-3 sm:p-4 shadow-sm",
+          isUser 
+            ? "bg-indigo-600 text-white rounded-tr-none" 
+            : "bg-white border border-zinc-200 text-zinc-900 rounded-tl-none"
         )}
-      </div>
-
-      <div className="flex-1 space-y-2 overflow-hidden">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold text-zinc-900">
-            {role === "user" ? "You" : "Rimns AI"}
+      >
+        {/* Role Label & Actions */}
+        <div className="flex items-center justify-between mb-1 gap-4">
+          <span className={cn(
+            "text-[10px] font-bold uppercase tracking-wider",
+            isUser ? "text-indigo-100" : "text-zinc-400"
+          )}>
+            {isUser ? "You" : "Rimns AI"}
           </span>
-          {role === "model" && (
+          {!isUser && (
             <button
               onClick={handleCopy}
-              className="rounded-md p-1 hover:bg-zinc-200 transition-colors text-zinc-400 hover:text-zinc-600"
+              className="rounded-md p-1 hover:bg-zinc-100 transition-colors text-zinc-400 hover:text-zinc-600"
               title="Copy response"
             >
-              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
             </button>
           )}
         </div>
         
+        {/* Images */}
         {images && images.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-2">
             {images.map((img, idx) => (
@@ -62,16 +67,32 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ role, text, images, is
                 key={idx} 
                 src={img} 
                 alt="Uploaded content" 
-                className="max-w-[200px] max-h-[200px] rounded-lg object-cover border border-zinc-200 shadow-sm"
+                className="max-w-full rounded-lg object-cover border border-black/5 shadow-sm"
                 referrerPolicy="no-referrer"
               />
             ))}
           </div>
         )}
 
-        <div className="markdown-body prose prose-zinc max-w-none prose-pre:bg-zinc-900 prose-pre:text-zinc-100 prose-code:text-indigo-600 prose-code:bg-indigo-50 prose-code:px-1 prose-code:rounded">
+        {/* Text Content */}
+        <div className={cn(
+          "markdown-body prose max-w-none text-sm sm:text-base leading-relaxed",
+          isUser 
+            ? "prose-invert prose-p:text-white prose-headings:text-white prose-strong:text-white prose-code:text-indigo-200 prose-code:bg-indigo-700/50" 
+            : "prose-zinc prose-p:text-zinc-800 prose-code:text-indigo-600 prose-code:bg-indigo-50"
+        )}>
           <Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown>
         </div>
+
+        {/* Bubble Tail (Optional visual flair) */}
+        <div 
+          className={cn(
+            "absolute top-0 w-2 h-2",
+            isUser 
+              ? "-right-1 bg-indigo-600 [clip-path:polygon(0_0,0_100%,100%_0)]" 
+              : "-left-1 bg-white border-l border-t border-zinc-200 [clip-path:polygon(0_0,100%_0,100%_100%)]"
+          )}
+        />
       </div>
     </motion.div>
   );

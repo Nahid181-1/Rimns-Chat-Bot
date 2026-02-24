@@ -310,9 +310,19 @@ export default function App() {
         {/* Chat Area */}
         <div 
           ref={scrollRef}
-          className="flex-1 overflow-y-auto scroll-smooth"
+          className="flex-1 overflow-y-auto scroll-smooth bg-[#e5ddd5] relative"
         >
-          {messages.length <= 1 && !isLoading ? (
+          {/* WhatsApp-style background pattern overlay */}
+          <div 
+            className="absolute inset-0 opacity-[0.05] pointer-events-none"
+            style={{ 
+              backgroundImage: `url("https://www.transparenttextures.com/patterns/cubes.png")`,
+              backgroundRepeat: 'repeat'
+            }}
+          />
+          
+          <div className="relative z-10 py-4">
+            {messages.length <= 1 && !isLoading ? (
             <div className="h-full flex flex-col items-center justify-center p-4 sm:p-8 text-center max-w-2xl mx-auto space-y-6">
               <div className="h-12 w-12 sm:h-16 sm:w-16 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-xl shadow-indigo-200">
                 <Sparkles className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
@@ -381,6 +391,7 @@ export default function App() {
               )}
             </div>
           )}
+          </div>
         </div>
 
         {/* Input Area */}
